@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { useSHMStore } from './store/useSHMStore';
 import { mockSimService } from './services/mockSimService';
+import { useBridgeData } from './hooks/useBridgeData';
 
 import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
@@ -19,13 +20,18 @@ export const App: React.FC = () => {
     const activeTab = useSHMStore((state) => state.activeTab);
     const selectedComponentId = useSHMStore((state) => state.selectedComponentId);
 
-    // Initialize real-time WebSocket simulator feed
+    // Initialize IoT data pipeline (mock or real WebSocket)
+    useBridgeData();
+
+    // Legacy simulation feed for existing dashboard sensors
+    // (will be removed once those components migrate to real ESP32 data)
     useEffect(() => {
         mockSimService.start();
         return () => {
             mockSimService.stop();
         };
     }, []);
+
 
     return (
         <div className="flex flex-col h-screen w-screen bg-shm-bg text-slate-100 font-sans overflow-hidden select-none">

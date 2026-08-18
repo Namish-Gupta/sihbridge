@@ -126,3 +126,112 @@ export interface HealthScoreBreakdown {
 export type ConnectionState = 'LIVE' | 'DEGRADED' | 'OFFLINE';
 
 export type HistoricalTimeframe = '7D' | '30D' | '6M' | '1Y' | '5Y';
+
+// ============================================================
+// ESP32 IoT / Structural Health Monitoring Types
+// ============================================================
+
+/** Calibrated accelerometer reading in g (already calibrated by ESP32) */
+export interface AccelerometerReading {
+    x: number; // g
+    y: number; // g
+    z: number; // g
+}
+
+/**
+ * Full ESP32 → FastAPI → frontend message schema.
+ *
+ * The ESP32 performs sensor acquisition, calibration, 3-accelerometer
+ * validation, feature extraction, and TinyML inference locally.
+ * The frontend receives the processed result — it does NOT perform
+ * inference, calibration, or rescaling.
+ */
+export interface IoTSensorData {
+    type: 'sensor_update';
+    node_id: string;
+    timestamp?: number;    // Unix epoch seconds (if ESP32 has NTP)
+    timestamp_ms?: number; // millis() from ESP32 (always available)
+
+    sensors: {
+        /** Primary TinyML accelerometer stream */
+        mpu6500: AccelerometerReading;
+        /** Secondary TinyML accelerometer stream */
+        adxl345: AccelerometerReading;
+        /** Redundant / validation reference ONLY — never used by TinyML */
+        gy61: AccelerometerReading;
+    };
+
+    environment: {
+        temperature: number; // °C (from DHT11)
+        humidity: number;    // %  (from DHT11)
+    };
+
+    strain: {
+        value: number | null; // null = HX711 + strain gauge not yet integrated
+        unit: string;
+    };
+
+    /**
+     * ESP32 3-accelerometer cross-validation result.
+     * Compares GY-61 ↔ MPU6500, GY-61 ↔ ADXL345, MPU6500 ↔ ADXL345
+     * independently for X, Y, Z axes.
+     */
+    validation: {
+        status: 'OK' | 'ERROR';
+        total_samples: number;
+        bad_samples: number;
+        allowed_bad_samples: number;
+        deviation_threshold: number;
+        maximum_deviation: number;
+    };
+
+    /**
+     * TinyML inference result from ESP32.
+     * null when sensor validation has failed — TinyML is NOT run.
+     *
+     * The 29-feature vector uses MPU6500 (features 0-11) and ADXL345
+     * (features 12-23) accelerometer data, plus strain (24-26),
+     * temperature (27), and humidity (28). GY-61 is NEVER in the
+     * feature vector.
+     */
+    tinyml: {
+        prediction: 'HEALTHY' | 'DAMAGED';
+        damage_probability: number;
+        healthy_probability: number;
+    } | null;
+}
+
+/**
+ * Overall bridge health state derived from IoT data.
+ *
+ * Precedence (evaluated top-to-bottom):
+ *
+ *   1. No data for timeout       → OFFLINE
+ *   2. validation.status != "OK" → SENSOR_ERROR
+ *   3. tinyml is null            → HEALTHY (inference pending)
+ *   4. tinyml.prediction         → DAMAGED or HEALTHY
+ *
+ * IMPORTANT: Never display DAMAGED when validation has failed.
+ * Sensor malfunction and structural damage are fundamentally
+ * different conditions.
+ */
+export type BridgeHealthState =
+    | 'HEALTHY'
+    | 'DAMAGED'
+    | 'SENSOR_ERROR'
+    | 'OFFLINE';
+
+/** WebSocket connection lifecycle states */
+export type WsConnectionState =
+    | 'CONNECTED'
+    | 'CONNECTING'
+    | 'DISCONNECTED'
+    | 'ERROR'
+    | 'RECONNECTING';
+
+/** Single data point in a rolling time-series chart buffer */
+export interface IoTHistoryPoint {
+    /** Browser Date.now() when the message was received */
+    receivedAt: number;
+    value: number;
+}

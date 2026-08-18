@@ -1,5 +1,6 @@
 import React from 'react';
 import { StructuralHealthOverview } from './StructuralHealthOverview';
+import { IoTLivePanel } from './IoTLivePanel';
 import { DigitalTwinView } from '../digital-twin/DigitalTwinView';
 import { HistoricalTimeline } from '../analytics/HistoricalTimeline';
 import { useSHMStore } from '../../store/useSHMStore';
@@ -24,6 +25,10 @@ export const DashboardView: React.FC = () => {
         <div className="p-6 max-w-[1600px] mx-auto space-y-6 overflow-y-auto h-full">
             {/* Top Structural Health Score Gauge */}
             <StructuralHealthOverview />
+
+            {/* ESP32 IoT Live Feed Panel */}
+            <IoTLivePanel />
+
 
             {/* Main Split Layout: 3D Digital Twin (Left) vs Active Intelligence Panel (Right) */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">

@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSHMStore } from '../../store/useSHMStore';
 import { BRIDGE_METADATA } from '../../data/mockBridgeData';
+import { USE_MOCK_DATA } from '../../config';
 import {
     ShieldCheck,
     Wifi,
@@ -10,7 +11,8 @@ import {
     UserCheck,
     MapPin,
     Building2,
-    Activity
+    Activity,
+    Radio,
 } from 'lucide-react';
 
 export const Header: React.FC = () => {
@@ -20,6 +22,23 @@ export const Header: React.FC = () => {
     const isSimulating = useSHMStore((state) => state.isSimulating);
     const toggleSimulation = useSHMStore((state) => state.toggleSimulation);
     const activeTab = useSHMStore((state) => state.activeTab);
+    const wsConnectionState = useSHMStore((state) => state.wsConnectionState);
+    const lastIoTTimestamp = useSHMStore((state) => state.lastIoTTimestamp);
+
+    // Force re-render every second for data age display
+    const [, setTick] = useState(0);
+    useEffect(() => {
+        const t = setInterval(() => setTick((v) => v + 1), 1000);
+        return () => clearInterval(t);
+    }, []);
+
+    const iotDataAge = (): string => {
+        if (lastIoTTimestamp === null) return 'No data';
+        const elapsed = Math.max(0, Math.floor((Date.now() - lastIoTTimestamp) / 1000));
+        if (elapsed < 5) return 'Just now';
+        if (elapsed < 60) return `${elapsed}s ago`;
+        return `${Math.floor(elapsed / 60)}m ago`;
+    };
     const setActiveTab = useSHMStore((state) => state.setActiveTab);
 
     return (
@@ -103,6 +122,23 @@ export const Header: React.FC = () => {
                     <div className="text-[10px] font-mono text-slate-400">
                         Sync: <span className="text-slate-200">{lastSyncTimestamp}</span>
                     </div>
+                </div>
+
+                {/* ESP32 IoT Status Badge */}
+                <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded border text-xs font-mono font-semibold ${
+                    wsConnectionState === 'CONNECTED'
+                        ? USE_MOCK_DATA
+                            ? 'bg-purple-950/50 border-purple-500/30 text-purple-300'
+                            : 'bg-emerald-950/50 border-emerald-500/30 text-emerald-300'
+                        : 'bg-red-950/50 border-red-500/30 text-red-400'
+                }`}>
+                    <Radio className="w-3 h-3" />
+                    <span>
+                        {wsConnectionState === 'CONNECTED'
+                            ? USE_MOCK_DATA ? 'MOCK IoT' : 'ESP32 LIVE'
+                            : 'ESP32 OFFLINE'}
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-normal">{iotDataAge()}</span>
                 </div>
 
                 {/* Structural Health Quick Badge */}
