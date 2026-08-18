@@ -2,6 +2,34 @@ import React, { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useSHMStore } from '../../store/useSHMStore';
+import { VISUALIZATION_SCALE } from '../../config';
+
+/**
+ * VISUALIZATION-ONLY vibration metric.
+ *
+ * We do NOT use raw sqrt(x²+y²+z²) because a stationary
+ * accelerometer already reads ~1g from gravity.
+ *
+ * Instead, we compute dynamic acceleration: the deviation
+ * from the expected static baseline [0, 0, 1g].
+ *
+ *   dynamicAccel = sqrt(x² + y² + (z - 1)²)
+ *
+ * This is ~0 when the bridge is stationary and increases
+ * when actual vibration occurs.
+ *
+ * The visual displacement is then:
+ *   visualDisp = dynamicAccel * VISUALIZATION_SCALE
+ *
+ * VISUALIZATION_SCALE is purely visual and does NOT
+ * represent real physical displacement.
+ */
+function computeDynamicAcceleration(x: number, y: number, z: number): number {
+    const dx = x;       // baseline x ≈ 0
+    const dy = y;       // baseline y ≈ 0
+    const dz = z - 1.0; // baseline z ≈ 1g
+    return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
 
 export const BridgeModel: React.FC = () => {
     const selectedComponentId = useSHMStore((state) => state.selectedComponentId);
@@ -9,12 +37,22 @@ export const BridgeModel: React.FC = () => {
     const state0Mode = useSHMStore((state) => state.state0Mode);
     const state0SliderPos = useSHMStore((state) => state.state0SliderPos);
 
+    // IoT data for vibration visualization
+    const iotData = useSHMStore((state) => state.iotData);
+    const bridgeHealthState = useSHMStore((state) => state.bridgeHealthState);
+
     const pierP3Ref = useRef<THREE.Mesh>(null);
     const girderG2Ref = useRef<THREE.Mesh>(null);
 
-    // Pulse animation for anomalous elements
+    // Refs for IoT-driven vibration on deck spans
+    const deckD1Ref = useRef<THREE.Group>(null);
+    const deckD2Ref = useRef<THREE.Group>(null);
+
+    // Pulse animation for anomalous elements + IoT vibration
     useFrame(({ clock }) => {
         const elapsedTime = clock.getElapsedTime();
+
+        // --- Existing anomaly pulse animations (preserved) ---
         if (pierP3Ref.current) {
             const material = pierP3Ref.current.material as THREE.MeshStandardMaterial;
             if (material) {
@@ -34,6 +72,23 @@ export const BridgeModel: React.FC = () => {
                 material.emissiveIntensity = 0.3 + pulse * 0.4;
             }
         }
+
+        // --- IoT-driven subtle vibration visualization ---
+        if (iotData?.sensors?.mpu6500 && bridgeHealthState !== 'OFFLINE') {
+            const mpu = iotData.sensors.mpu6500;
+            const dynamicAccel = computeDynamicAcceleration(mpu.x, mpu.y, mpu.z);
+
+            // Very subtle vertical oscillation proportional to dynamic acceleration
+            // The sin(time) creates a smooth visual vibration; dynamicAccel scales its magnitude
+            const vibOffset = dynamicAccel * VISUALIZATION_SCALE * 0.0001 * Math.sin(elapsedTime * 12);
+
+            if (deckD1Ref.current) {
+                deckD1Ref.current.position.y = 5.8 + vibOffset;
+            }
+            if (deckD2Ref.current) {
+                deckD2Ref.current.position.y = 5.8 + vibOffset;
+            }
+        }
     });
 
     const getMaterialColor = (id: string, defaultHex: string, status: 'normal' | 'warning' | 'critical') => {
@@ -47,10 +102,21 @@ export const BridgeModel: React.FC = () => {
             return '#334155'; // Minor/no difference
         }
 
+        // IoT health-state-driven color overlays
+        if (bridgeHealthState === 'DAMAGED' && (id === 'deck-d1' || id === 'deck-d2')) {
+            return '#ef4444'; // Red tint when TinyML reports DAMAGED
+        }
+        if (bridgeHealthState === 'SENSOR_ERROR' && (id === 'deck-d1' || id === 'deck-d2')) {
+            return '#f59e0b'; // Amber when sensor validation failed
+        }
+
         if (status === 'critical') return '#ef4444';
         if (status === 'warning') return '#f59e0b';
         return defaultHex;
     };
+
+    // Slight dimming when OFFLINE
+    const offlineDim = bridgeHealthState === 'OFFLINE' ? 0.5 : 1.0;
 
     return (
         <group position={[0, 0, 0]}>
@@ -65,13 +131,13 @@ export const BridgeModel: React.FC = () => {
             {/* Left Abutment */}
             <mesh position={[-62, -2, 0]}>
                 <boxGeometry args={[8, 12, 16]} />
-                <meshStandardMaterial color="#334155" roughness={0.6} />
+                <meshStandardMaterial color="#334155" roughness={0.6} opacity={offlineDim} transparent={offlineDim < 1} />
             </mesh>
 
             {/* Right Abutment */}
             <mesh position={[62, -2, 0]}>
                 <boxGeometry args={[8, 12, 16]} />
-                <meshStandardMaterial color="#334155" roughness={0.6} />
+                <meshStandardMaterial color="#334155" roughness={0.6} opacity={offlineDim} transparent={offlineDim < 1} />
             </mesh>
 
             {/* --- PIERS (P1 to P4) --- */}
@@ -82,12 +148,13 @@ export const BridgeModel: React.FC = () => {
                     <meshStandardMaterial
                         color={getMaterialColor('pier-p1', '#475569', 'normal')}
                         roughness={0.5}
+                        opacity={offlineDim} transparent={offlineDim < 1}
                     />
                 </mesh>
                 {/* Pier Cap */}
                 <mesh position={[0, 5.8, 0]}>
                     <boxGeometry args={[5, 1.2, 12]} />
-                    <meshStandardMaterial color="#475569" />
+                    <meshStandardMaterial color="#475569" opacity={offlineDim} transparent={offlineDim < 1} />
                 </mesh>
             </group>
 
@@ -98,12 +165,13 @@ export const BridgeModel: React.FC = () => {
                     <meshStandardMaterial
                         color={getMaterialColor('pier-p2', '#475569', 'normal')}
                         roughness={0.5}
+                        opacity={offlineDim} transparent={offlineDim < 1}
                     />
                 </mesh>
                 {/* Pier Cap */}
                 <mesh position={[0, 5.8, 0]}>
                     <boxGeometry args={[5, 1.2, 12]} />
-                    <meshStandardMaterial color="#475569" />
+                    <meshStandardMaterial color="#475569" opacity={offlineDim} transparent={offlineDim < 1} />
                 </mesh>
             </group>
 
@@ -116,12 +184,13 @@ export const BridgeModel: React.FC = () => {
                         emissive="#ef4444"
                         emissiveIntensity={0.6}
                         roughness={0.4}
+                        opacity={offlineDim} transparent={offlineDim < 1}
                     />
                 </mesh>
                 {/* Pier Cap */}
                 <mesh position={[0, 5.8, 0]}>
                     <boxGeometry args={[5.2, 1.2, 12]} />
-                    <meshStandardMaterial color="#ef4444" emissive="#b91c1c" emissiveIntensity={0.4} />
+                    <meshStandardMaterial color="#ef4444" emissive="#b91c1c" emissiveIntensity={0.4} opacity={offlineDim} transparent={offlineDim < 1} />
                 </mesh>
             </group>
 
@@ -132,12 +201,13 @@ export const BridgeModel: React.FC = () => {
                     <meshStandardMaterial
                         color={getMaterialColor('pier-p4', '#475569', 'normal')}
                         roughness={0.5}
+                        opacity={offlineDim} transparent={offlineDim < 1}
                     />
                 </mesh>
                 {/* Pier Cap */}
                 <mesh position={[0, 5.8, 0]}>
                     <boxGeometry args={[5, 1.2, 12]} />
-                    <meshStandardMaterial color="#475569" />
+                    <meshStandardMaterial color="#475569" opacity={offlineDim} transparent={offlineDim < 1} />
                 </mesh>
             </group>
 
@@ -151,6 +221,7 @@ export const BridgeModel: React.FC = () => {
                 <meshStandardMaterial
                     color={getMaterialColor('girder-g1', '#334155', 'normal')}
                     roughness={0.5}
+                    opacity={offlineDim} transparent={offlineDim < 1}
                 />
             </mesh>
 
@@ -166,35 +237,36 @@ export const BridgeModel: React.FC = () => {
                     emissive="#f59e0b"
                     emissiveIntensity={0.3}
                     roughness={0.5}
+                    opacity={offlineDim} transparent={offlineDim < 1}
                 />
             </mesh>
 
             {/* --- DECK & ROADWAY --- */}
-            {/* Deck Span D1 (Left Span) */}
-            <group position={[-30, 5.8, 0]} onClick={(e) => { e.stopPropagation(); selectComponent('deck-d1'); }}>
+            {/* Deck Span D1 (Left Span) - ref for IoT vibration */}
+            <group ref={deckD1Ref} position={[-30, 5.8, 0]} onClick={(e) => { e.stopPropagation(); selectComponent('deck-d1'); }}>
                 {/* Main Concrete Slab */}
                 <mesh position={[0, 0, 0]}>
                     <boxGeometry args={[60, 0.8, 14]} />
-                    <meshStandardMaterial color={getMaterialColor('deck-d1', '#1e293b', 'normal')} roughness={0.4} />
+                    <meshStandardMaterial color={getMaterialColor('deck-d1', '#1e293b', 'normal')} roughness={0.4} opacity={offlineDim} transparent={offlineDim < 1} />
                 </mesh>
                 {/* Asphalt Road Top */}
                 <mesh position={[0, 0.42, 0]}>
                     <boxGeometry args={[59.8, 0.05, 13.6]} />
-                    <meshStandardMaterial color="#0f172a" roughness={0.9} />
+                    <meshStandardMaterial color="#0f172a" roughness={0.9} opacity={offlineDim} transparent={offlineDim < 1} />
                 </mesh>
             </group>
 
-            {/* Deck Span D2 (Right Span) */}
-            <group position={[30, 5.8, 0]} onClick={(e) => { e.stopPropagation(); selectComponent('deck-d2'); }}>
+            {/* Deck Span D2 (Right Span) - ref for IoT vibration */}
+            <group ref={deckD2Ref} position={[30, 5.8, 0]} onClick={(e) => { e.stopPropagation(); selectComponent('deck-d2'); }}>
                 {/* Main Concrete Slab */}
                 <mesh position={[0, 0, 0]}>
                     <boxGeometry args={[60, 0.8, 14]} />
-                    <meshStandardMaterial color={getMaterialColor('deck-d2', '#1e293b', 'warning')} roughness={0.4} />
+                    <meshStandardMaterial color={getMaterialColor('deck-d2', '#1e293b', 'warning')} roughness={0.4} opacity={offlineDim} transparent={offlineDim < 1} />
                 </mesh>
                 {/* Asphalt Road Top */}
                 <mesh position={[0, 0.42, 0]}>
                     <boxGeometry args={[59.8, 0.05, 13.6]} />
-                    <meshStandardMaterial color="#0f172a" roughness={0.9} />
+                    <meshStandardMaterial color="#0f172a" roughness={0.9} opacity={offlineDim} transparent={offlineDim < 1} />
                 </mesh>
             </group>
 
@@ -202,12 +274,12 @@ export const BridgeModel: React.FC = () => {
             {/* Crash Barriers North */}
             <mesh position={[0, 6.6, -6.8]}>
                 <boxGeometry args={[120, 0.8, 0.4]} />
-                <meshStandardMaterial color="#64748b" roughness={0.3} />
+                <meshStandardMaterial color="#64748b" roughness={0.3} opacity={offlineDim} transparent={offlineDim < 1} />
             </mesh>
             {/* Crash Barriers South */}
             <mesh position={[0, 6.6, 6.8]}>
                 <boxGeometry args={[120, 0.8, 0.4]} />
-                <meshStandardMaterial color="#64748b" roughness={0.3} />
+                <meshStandardMaterial color="#64748b" roughness={0.3} opacity={offlineDim} transparent={offlineDim < 1} />
             </mesh>
 
             {/* --- EXPANSION JOINTS --- */}
@@ -217,7 +289,7 @@ export const BridgeModel: React.FC = () => {
                 onClick={(e) => { e.stopPropagation(); selectComponent('ej-ej1'); }}
             >
                 <boxGeometry args={[0.6, 0.85, 14]} />
-                <meshStandardMaterial color={getMaterialColor('ej-ej1', '#475569', 'normal')} metalness={0.8} />
+                <meshStandardMaterial color={getMaterialColor('ej-ej1', '#475569', 'normal')} metalness={0.8} opacity={offlineDim} transparent={offlineDim < 1} />
             </mesh>
 
             {/* EJ2 */}
@@ -226,13 +298,13 @@ export const BridgeModel: React.FC = () => {
                 onClick={(e) => { e.stopPropagation(); selectComponent('ej-ej2'); }}
             >
                 <boxGeometry args={[0.6, 0.85, 14]} />
-                <meshStandardMaterial color={getMaterialColor('ej-ej2', '#475569', 'normal')} metalness={0.8} />
+                <meshStandardMaterial color={getMaterialColor('ej-ej2', '#475569', 'normal')} metalness={0.8} opacity={offlineDim} transparent={offlineDim < 1} />
             </mesh>
 
             {/* Center Line Marker */}
             <mesh position={[0, 6.28, 0]}>
                 <boxGeometry args={[116, 0.02, 0.3]} />
-                <meshStandardMaterial color="#e2e8f0" emissive="#94a3b8" emissiveIntensity={0.2} />
+                <meshStandardMaterial color="#e2e8f0" emissive="#94a3b8" emissiveIntensity={0.2} opacity={offlineDim} transparent={offlineDim < 1} />
             </mesh>
         </group>
     );
