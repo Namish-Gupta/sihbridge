@@ -9,8 +9,8 @@ import {
 
 export const BRIDGE_METADATA = {
     id: 'BR-CHE-009',
-    name: 'Chennai Coastal Bridge',
-    location: 'Ennore Port Corridor, Tamil Nadu, India',
+    name: 'Napier Bridge',
+    location: 'The Island,Park Town, Chennai, India',
     type: 'Multi-Span Pre-Stressed Concrete Box Girder Bridge',
     totalLength: '1,420 meters',
     commissionYear: 2019,

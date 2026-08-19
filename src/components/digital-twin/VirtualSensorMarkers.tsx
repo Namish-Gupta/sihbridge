@@ -1,7 +1,6 @@
 import React from 'react';
 import { Html } from '@react-three/drei';
 import { useSHMStore } from '../../store/useSHMStore';
-import { Activity } from 'lucide-react';
 import { VirtualSensorPopover } from './VirtualSensorPopover';
 
 export const VirtualSensorMarkers: React.FC = () => {
@@ -15,54 +14,61 @@ export const VirtualSensorMarkers: React.FC = () => {
 
     return (
         <group>
-            {pinnData.virtual_sensors.map((sensor) => {
-                // The physical bridge deck spans from roughly -60 (Left Abutment) to +60 (Right Abutment)
-                // We linearly interpolate x_normalized (0.0 to 1.0) onto this -60 to +60 range.
-                // 0.0 -> -60
-                // 1.0 -> 60
+            {pinnData.virtual_sensors.map((sensor, index) => {
                 const xPos = (sensor.x_normalized * 120) - 60;
                 const isDamaged = sensor.predicted_state === 'DAMAGED';
                 const isSelected = selectedVirtualSensorId === sensor.sensor_id;
+                
+                // Alternate label heights to prevent overlap along the deck
+                const isEven = index % 2 === 0;
+                const stickHeight = isEven ? 1.0 : 1.8;
+                const labelY = stickHeight + 0.2;
 
                 return (
-                    <group key={sensor.sensor_id} position={[xPos, 6.2, 3]}>
+                    <group key={sensor.sensor_id} position={[xPos, 8.5, 0.5]}>
+                        {/* Antenna Stick */}
+                        <mesh position={[0, stickHeight / 2, 0]}>
+                            <cylinderGeometry args={[0.02, 0.02, stickHeight]} />
+                            <meshStandardMaterial color="#94a3b8" />
+                        </mesh>
+
+                        {/* Physical Sensor Marker (Clear Red/Green Sphere) */}
                         <mesh
+                            renderOrder={10}
                             onClick={(e) => {
                                 e.stopPropagation();
                                 selectVirtualSensor(isSelected ? null : sensor.sensor_id);
                             }}
                         >
-                            <sphereGeometry args={[isSelected ? 0.6 : 0.4, 16, 16]} />
+                            <sphereGeometry args={[isSelected ? 0.45 : 0.35, 16, 16]} />
                             <meshStandardMaterial
-                                color={isDamaged ? '#ef4444' : '#8b5cf6'}
-                                emissive={isDamaged ? '#ef4444' : '#8b5cf6'}
-                                emissiveIntensity={isDamaged ? 1.0 : 0.6}
-                                transparent
-                                opacity={0.8}
+                                color={isDamaged ? '#ef4444' : '#22c55e'}
+                                roughness={0.6}
+                                depthTest={false}
                             />
+                            {isSelected && (
+                                <meshBasicMaterial color="#3b82f6" wireframe depthTest={false} />
+                            )}
                         </mesh>
                         
-                        {/* We only render the huge popover if the user explicitly clicked this sensor */}
-                        {isSelected && (
-                            <VirtualSensorPopover sensor={sensor} onClose={() => selectVirtualSensor(null)} />
-                        )}
-                        
-                        {/* Always show a tiny badge for context, similar to physical sensors, but distinct */}
+                        {/* Offset Label (Visible when NOT selected) */}
                         {!isSelected && (
-                            <Html position={[0, 0.8, 0]} center zIndexRange={[50, 0]}>
+                            <Html position={[0, labelY, 0]} center zIndexRange={[50, 0]}>
                                 <div
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         selectVirtualSensor(sensor.sensor_id);
                                     }}
-                                    className="cursor-pointer hover:scale-110 transition-transform select-none"
+                                    className="cursor-pointer select-none whitespace-nowrap bg-white border border-slate-300 text-slate-700 font-semibold text-[11px] rounded px-1.5 py-0.5 shadow-sm hover:bg-slate-50 hover:border-slate-400 transition-colors"
                                 >
-                                    <div className={`flex items-center justify-center px-1.5 py-0.5 rounded shadow-lg backdrop-blur-md text-[9px] font-bold border ${isDamaged ? 'bg-red-950/80 border-red-500 text-red-200' : 'bg-purple-950/80 border-purple-500 text-purple-200'}`}>
-                                        <Activity className="w-2.5 h-2.5 mr-0.5" />
-                                        {sensor.sensor_id}
-                                    </div>
+                                    {sensor.sensor_id}
                                 </div>
                             </Html>
+                        )}
+
+                        {/* Detail Popover */}
+                        {isSelected && (
+                            <VirtualSensorPopover sensor={sensor} onClose={() => selectVirtualSensor(null)} />
                         )}
                     </group>
                 );

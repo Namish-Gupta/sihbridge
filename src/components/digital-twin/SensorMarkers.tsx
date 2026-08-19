@@ -1,128 +1,136 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Html } from '@react-three/drei';
 import { useSHMStore } from '../../store/useSHMStore';
-import { Sensor } from '../../types/shm';
-import { Activity, Cpu, AlertTriangle } from 'lucide-react';
+import { X, Activity } from 'lucide-react';
 
 export const SensorMarkers: React.FC = () => {
-    const sensors = useSHMStore((state) => state.sensors);
-    const sensorFilter = useSHMStore((state) => state.sensorFilter);
-    const selectedComponentId = useSHMStore((state) => state.selectedComponentId);
-    const selectComponent = useSHMStore((state) => state.selectComponent);
+    const iotNodes = useSHMStore((state) => state.iotNodes);
+    const nodeStatuses = useSHMStore((state) => state.nodeStatuses);
+    
+    const [selectedNode, setSelectedNode] = useState<string | null>(null);
 
-    const filteredSensors = sensors.filter((sensor) => {
-        if (sensorFilter === 'all') return true;
-        return sensor.source === sensorFilter;
-    });
+    // Hardcode locations for the two boundary physical nodes
+    const nodePositions: Record<string, [number, number, number]> = {
+        'NODE_01': [-60, 8.5, 2],
+        'NODE_02': [60, 8.5, -2],
+    };
 
     return (
         <group>
-            {filteredSensors.map((sensor) => {
-                const isPhysical = sensor.source === 'physical';
-                const isCritical = sensor.status === 'critical';
-                const isWarning = sensor.status === 'warning';
-                const isComponentSelected = selectedComponentId === sensor.componentId;
+            {Object.keys(iotNodes).map((nodeId) => {
+                const data = iotNodes[nodeId];
+                const status = nodeStatuses[nodeId];
+                const isSelected = selectedNode === nodeId;
+                const pos = nodePositions[nodeId] || [0, 8.5, 0];
+
+                if (!data) return null;
+
+                const stickHeight = 2.4;
+                const labelY = stickHeight + 0.2;
 
                 return (
-                    <group
-                        key={sensor.id}
-                        position={[sensor.position.x, sensor.position.y, sensor.position.z]}
-                    >
-                        {/* 3D Sphere Marker in Scene */}
-                        <mesh
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                selectComponent(sensor.componentId);
-                            }}
-                        >
-                            <sphereGeometry args={[isCritical ? 0.7 : 0.5, 16, 16]} />
-                            <meshStandardMaterial
-                                color={
-                                    isCritical
-                                        ? '#ef4444'
-                                        : isWarning
-                                            ? '#f59e0b'
-                                            : isPhysical
-                                                ? '#06b6d4'
-                                                : '#8b5cf6'
-                                }
-                                emissive={
-                                    isCritical
-                                        ? '#ef4444'
-                                        : isPhysical
-                                            ? '#06b6d4'
-                                            : '#8b5cf6'
-                                }
-                                emissiveIntensity={isCritical ? 1.0 : 0.6}
-                            />
+                    <group key={nodeId} position={pos}>
+                        {/* Antenna Stick */}
+                        <mesh position={[0, stickHeight / 2, 0]}>
+                            <cylinderGeometry args={[0.03, 0.03, stickHeight]} />
+                            <meshStandardMaterial color="#94a3b8" />
                         </mesh>
 
-                        {/* HTML Overlay Badge attached in 3D Space */}
-                        <Html
-                            position={[0, 1.2, 0]}
-                            center
-                            distanceFactor={35}
-                            zIndexRange={[100, 0]}
+                        {/* Physical Sphere Marker */}
+                        <mesh
+                            renderOrder={10}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedNode(isSelected ? null : nodeId);
+                            }}
                         >
-                            <div
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    selectComponent(sensor.componentId);
-                                }}
-                                className={`cursor-pointer transition-all duration-200 select-none ${isComponentSelected ? 'scale-110 z-30' : 'hover:scale-105'
-                                    }`}
-                            >
-                                <div
-                                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border shadow-lg backdrop-blur-md transition-all ${isCritical
-                                            ? 'bg-red-950/90 border-red-500 text-red-200 shadow-red-950/50 animate-pulse-glow'
-                                            : isWarning
-                                                ? 'bg-amber-950/90 border-amber-500 text-amber-200 shadow-amber-950/50'
-                                                : isPhysical
-                                                    ? 'bg-cyan-950/90 border-cyan-500/60 text-cyan-200 shadow-cyan-950/40'
-                                                    : 'bg-purple-950/90 border-purple-500/60 text-purple-200 shadow-purple-950/40'
-                                        }`}
+                            <sphereGeometry args={[isSelected ? 0.6 : 0.45, 16, 16]} />
+                            <meshStandardMaterial color="#2563eb" depthTest={false} />
+                        </mesh>
+                        
+                        {/* Offset Label */}
+                        {!isSelected && (
+                            <Html position={[0, labelY, 0]} center zIndexRange={[50, 0]}>
+                                <div 
+                                    className="cursor-pointer select-none whitespace-nowrap bg-blue-50 border border-blue-200 text-blue-700 font-bold text-[11px] rounded px-2 py-0.5 shadow-sm hover:bg-blue-100 transition-colors"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedNode(nodeId);
+                                    }}
                                 >
-                                    {/* Icon */}
-                                    {isCritical ? (
-                                        <AlertTriangle className="w-3.5 h-3.5 text-red-400 animate-bounce" />
-                                    ) : isPhysical ? (
-                                        <Activity className="w-3.5 h-3.5 text-cyan-400" />
-                                    ) : (
-                                        <Cpu className="w-3.5 h-3.5 text-purple-400" />
-                                    )}
-
-                                    {/* Sensor ID & Source Badge */}
-                                    <span className="font-mono font-bold tracking-tight">{sensor.id}</span>
-
-                                    <span
-                                        className={`px-1 py-0.5 text-[9px] font-bold rounded uppercase tracking-wider ${isPhysical
-                                                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                                                : 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-                                            }`}
-                                    >
-                                        {isPhysical ? 'MEASURED' : 'AI-INFERRED'}
-                                    </span>
-
-                                    {/* Live Telemetry Value */}
-                                    <span className="font-mono font-semibold ml-0.5 text-slate-100">
-                                        {sensor.value} {sensor.unit}
-                                    </span>
-
-                                    {/* AI Confidence Badge */}
-                                    {!isPhysical && sensor.confidence && (
-                                        <span
-                                            className={`text-[9px] font-mono font-bold px-1 rounded ${sensor.confidence >= 90
-                                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                                                    : 'bg-amber-500/20 text-amber-300'
-                                                }`}
-                                            title={`Model Confidence: ${sensor.confidence}% (${sensor.modelType || 'AI Engine'})`}
-                                        >
-                                            {sensor.confidence}% Conf
-                                        </span>
-                                    )}
+                                    {nodeId}
                                 </div>
-                            </div>
-                        </Html>
+                            </Html>
+                        )}
+
+                        {/* Detail Popover Panel */}
+                        {isSelected && (
+                            <Html position={[0, labelY, 0]} center zIndexRange={[100, 0]}>
+                                <div className="w-72 bg-white border border-slate-200 shadow-xl rounded-lg overflow-hidden text-slate-800 select-none">
+                                    <div className="px-4 py-3 flex items-center justify-between border-b bg-slate-50">
+                                        <div className="flex items-center gap-2">
+                                            <Activity className="w-4 h-4 text-blue-500" />
+                                            <div>
+                                                <h3 className="font-bold text-sm tracking-tight text-slate-800">{nodeId}</h3>
+                                                <p className="text-[10px] text-slate-500 font-mono">State: {status?.health || 'UNKNOWN'}</p>
+                                            </div>
+                                        </div>
+                                        <button onClick={(e) => { e.stopPropagation(); setSelectedNode(null); }} className="text-slate-400 hover:text-slate-700 transition-colors">
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                    <div className="p-4 space-y-3 max-h-80 overflow-y-auto custom-scrollbar text-xs">
+                                        <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                                            <span className="font-medium text-slate-500">TinyML prediction</span>
+                                            <span className="font-bold text-slate-700">{data.tinyml?.prediction || 'N/A'}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                                            <span className="font-medium text-slate-500">Damage probability</span>
+                                            <span className="font-mono text-slate-700">
+                                                {data.tinyml?.damage_probability !== undefined 
+                                                    ? (data.tinyml.damage_probability * 100).toFixed(1) + '%' 
+                                                    : 'N/A'}
+                                            </span>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-2 mt-2">
+                                            <div className="bg-slate-50 p-2 rounded border border-slate-100">
+                                                <div className="text-[9px] text-slate-500 mb-1">Temperature</div>
+                                                <div className="font-mono font-medium text-slate-700">{data.environment?.temperature?.toFixed(1) || 'N/A'} °C</div>
+                                            </div>
+                                            <div className="bg-slate-50 p-2 rounded border border-slate-100">
+                                                <div className="text-[9px] text-slate-500 mb-1">Humidity</div>
+                                                <div className="font-mono font-medium text-slate-700">{data.environment?.humidity?.toFixed(1) || 'N/A'} %</div>
+                                            </div>
+                                        </div>
+
+                                        <div className="mt-3">
+                                            <h4 className="text-[10px] font-bold text-slate-500 mb-1.5 border-b border-slate-100 pb-1">Sensor Features</h4>
+                                            <div className="space-y-1">
+                                                <div className="flex justify-between items-center px-1 text-[10px] font-mono">
+                                                    <span className="text-slate-500">MPU X/Y/Z</span>
+                                                    <span className="text-slate-700">
+                                                        {data.sensors?.mpu6500 ? `${data.sensors.mpu6500.x.toFixed(2)}, ${data.sensors.mpu6500.y.toFixed(2)}, ${data.sensors.mpu6500.z.toFixed(2)}` : 'N/A'}
+                                                    </span>
+                                                </div>
+                                                <div className="flex justify-between items-center px-1 text-[10px] font-mono">
+                                                    <span className="text-slate-500">ADXL X/Y/Z</span>
+                                                    <span className="text-slate-700">
+                                                        {data.sensors?.adxl345 ? `${data.sensors.adxl345.x.toFixed(2)}, ${data.sensors.adxl345.y.toFixed(2)}, ${data.sensors.adxl345.z.toFixed(2)}` : 'N/A'}
+                                                    </span>
+                                                </div>
+                                                <div className="flex justify-between items-center px-1 text-[10px] font-mono">
+                                                    <span className="text-slate-500">GY-61 X/Y/Z</span>
+                                                    <span className="text-slate-700">
+                                                        {data.sensors?.gy61 ? `${data.sensors.gy61.x.toFixed(2)}, ${data.sensors.gy61.y.toFixed(2)}, ${data.sensors.gy61.z.toFixed(2)}` : 'N/A'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </Html>
+                        )}
                     </group>
                 );
             })}

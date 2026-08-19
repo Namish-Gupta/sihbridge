@@ -25,7 +25,7 @@ export default {
             },
             fontFamily: {
                 mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
-                sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'sans-serif'],
+                sans: ['Outfit', 'Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'sans-serif'],
             },
             boxShadow: {
                 'glow-cyan': '0 0 15px rgba(6, 182, 212, 0.3)',
