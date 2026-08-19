@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, Literal
+from typing import Optional, Literal, List
 
 class AccelerometerReading(BaseModel):
     x: float
@@ -42,3 +42,4 @@ class IoTSensorData(BaseModel):
     strain: Strain
     validation: Validation
     tinyml: Optional[TinyML]
+    features: List[float] = Field(..., min_length=29, max_length=29)

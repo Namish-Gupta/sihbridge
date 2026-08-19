@@ -4,78 +4,35 @@
 
 @layer base {
   body {
-    @apply bg-[#090d16] text-slate-100 font-sans antialiased overflow-hidden;
-    color-scheme: dark;
+    @apply bg-[#f8f9fa] text-slate-800 font-sans antialiased overflow-hidden;
+    color-scheme: light;
   }
 }
 
-/* Custom scrollbars for high information density engineering panels */
+/* Custom scrollbars for clean panels */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0f172a;
+  background: #f1f5f9;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: #cbd5e1;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
-}
-
-/* Custom glowing badge animations */
-@keyframes criticalPulse {
-  0%, 100% {
-    box-shadow: 0 0 15px rgba(239, 68, 68, 0.7), inset 0 0 10px rgba(239, 68, 68, 0.3);
-    border-color: rgba(239, 68, 68, 0.9);
-  }
-  50% {
-    box-shadow: 0 0 5px rgba(239, 68, 68, 0.2), inset 0 0 2px rgba(239, 68, 68, 0.1);
-    border-color: rgba(239, 68, 68, 0.4);
-  }
-}
-
-.animate-critical-pulse {
-  animation: criticalPulse 2s infinite;
-}
-
-@keyframes warningPulse {
-  0%, 100% {
-    box-shadow: 0 0 12px rgba(245, 158, 11, 0.6);
-    border-color: rgba(245, 158, 11, 0.8);
-  }
-  50% {
-    box-shadow: 0 0 4px rgba(245, 158, 11, 0.2);
-    border-color: rgba(245, 158, 11, 0.4);
-  }
-}
-
-.animate-warning-pulse {
-  animation: warningPulse 2.5s infinite;
-}
-
-/* Glassmorphism panel styling */
-.glass-panel {
-  background: rgba(15, 23, 42, 0.85);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(51, 65, 85, 0.6);
-}
-
-.glass-panel-header {
-  background: rgba(30, 41, 59, 0.6);
-  border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+  background: #94a3b8;
 }
 
 /* Chart customized tooltip styling */
 .recharts-default-tooltip {
-  background-color: #0f172a !important;
-  border-color: #334155 !important;
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
   border-radius: 6px !important;
-  color: #f8fafc !important;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5) !important;
+  color: #1e293b !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
 }

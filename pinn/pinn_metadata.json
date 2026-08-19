@@ -1,0 +1,55 @@
+{
+    "model_name": "SHM State-Conditioned PINN",
+    "model_file": "shm_pinn.onnx",
+    "input_count": 5,
+    "input_dimensions": {
+        "x": 1,
+        "node1_features": 29,
+        "node2_features": 29,
+        "node1_damage_probability": 1,
+        "node2_damage_probability": 1
+    },
+    "total_input_dimension": 61,
+    "output_dimensions": {
+        "displacement": 1,
+        "virtual_features": 29
+    },
+    "total_output_dimension": 30,
+    "number_of_tinyml_features": 29,
+    "virtual_sensor_positions": 21,
+    "normalization": {
+        "mean_file": "pinn_feature_mean.npy",
+        "std_file": "pinn_feature_std.npy"
+    },
+    "feature_order": [
+        "mpu_x_mean",
+        "mpu_x_std",
+        "mpu_x_rms",
+        "mpu_x_ptp",
+        "mpu_y_mean",
+        "mpu_y_std",
+        "mpu_y_rms",
+        "mpu_y_ptp",
+        "mpu_z_mean",
+        "mpu_z_std",
+        "mpu_z_rms",
+        "mpu_z_ptp",
+        "adxl_x_mean",
+        "adxl_x_std",
+        "adxl_x_rms",
+        "adxl_x_ptp",
+        "adxl_y_mean",
+        "adxl_y_std",
+        "adxl_y_rms",
+        "adxl_y_ptp",
+        "adxl_z_mean",
+        "adxl_z_std",
+        "adxl_z_rms",
+        "adxl_z_ptp",
+        "strain_mean",
+        "strain_std",
+        "strain_ptp",
+        "temperature_mean",
+        "humidity_mean"
+    ]
+}

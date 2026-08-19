@@ -16,15 +16,14 @@ import { IoTSensorData, WsConnectionState } from '../types/shm';
 export function useBridgeData() {
     const processIoTMessage = useSHMStore((s) => s.processIoTMessage);
     const setWsConnectionState = useSHMStore((s) => s.setWsConnectionState);
-    const setBridgeHealthState = useSHMStore((s) => s.setBridgeHealthState);
 
     // Refs to avoid stale closures in callbacks
     const processRef = useRef(processIoTMessage);
     const setWsRef = useRef(setWsConnectionState);
-    const setHealthRef = useRef(setBridgeHealthState);
+    const setPinnDataRef = useRef(useSHMStore.getState().setPinnData);
     processRef.current = processIoTMessage;
     setWsRef.current = setWsConnectionState;
-    setHealthRef.current = setBridgeHealthState;
+    setPinnDataRef.current = useSHMStore.getState().setPinnData;
 
     // Start data source (WebSocket or mock)
     useEffect(() => {
@@ -64,10 +63,18 @@ export function useBridgeData() {
                     return true;
                 };
 
-                if (isValid(data)) {
-                    processRef.current(data);
-                } else {
-                    console.error('[useBridgeData] Malformed IoT JSON received. Rejecting message.', data);
+                if (data.type === 'sensor_update') {
+                    if (isValid(data)) {
+                        processRef.current(data);
+                    } else {
+                        console.error('[useBridgeData] Malformed IoT JSON received. Rejecting message.', data);
+                    }
+                } else if (data.type === 'pinn_update') {
+                    if (data.status && typeof data.num_virtual_sensors === 'number' && Array.isArray(data.virtual_sensors)) {
+                        setPinnDataRef.current(data);
+                    } else {
+                        console.error('[useBridgeData] Malformed PINN JSON received. Rejecting message.', data);
+                    }
                 }
             });
             unsubs.push(unsubMsg);
@@ -88,21 +95,15 @@ export function useBridgeData() {
     // Offline detection via periodic check
     useEffect(() => {
         const interval = setInterval(() => {
-            const lastTs = useSHMStore.getState().lastIoTTimestamp;
-            const currentHealth = useSHMStore.getState().bridgeHealthState;
+            const state = useSHMStore.getState();
+            const now = Date.now();
 
-            if (lastTs === null) {
-                // Never received any data
-                if (currentHealth !== 'OFFLINE') {
-                    setHealthRef.current('OFFLINE');
+            // New multi-node timeout logic
+            Object.values(state.nodeStatuses).forEach(status => {
+                if (status.status !== 'OFFLINE' && (now - status.lastSeen > OFFLINE_TIMEOUT_MS)) {
+                    useSHMStore.getState().setNodeStatus(status.nodeId, 'OFFLINE');
                 }
-                return;
-            }
-
-            const elapsed = Date.now() - lastTs;
-            if (elapsed > OFFLINE_TIMEOUT_MS && currentHealth !== 'OFFLINE') {
-                setHealthRef.current('OFFLINE');
-            }
+            });
         }, 5000); // Check every 5 seconds
 
         return () => clearInterval(interval);

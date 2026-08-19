@@ -11,6 +11,9 @@ import {
     BridgeHealthState,
     WsConnectionState,
     IoTHistoryPoint,
+    IoTNodeMap,
+    NodeConnectionState,
+    PinnUpdate,
 } from '../types/shm';
 import {
     INITIAL_COMPONENTS,
@@ -36,7 +39,7 @@ export type State0Mode = 'slider' | 'overlay' | 'split' | 'difference';
 // ============================================================
 // IoT rolling buffer history keys
 // ============================================================
-const IOT_HISTORY_KEYS = [
+export const IOT_HISTORY_KEYS = [
     'mpu6500_x', 'mpu6500_y', 'mpu6500_z',
     'adxl345_x', 'adxl345_y', 'adxl345_z',
     'gy61_x', 'gy61_y', 'gy61_z',
@@ -45,7 +48,7 @@ const IOT_HISTORY_KEYS = [
     'damage_probability',
 ] as const;
 
-type IoTHistoryKey = typeof IOT_HISTORY_KEYS[number];
+export type IoTHistoryKey = typeof IOT_HISTORY_KEYS[number];
 
 function createEmptyHistory(): Record<IoTHistoryKey, IoTHistoryPoint[]> {
     const h = {} as Record<IoTHistoryKey, IoTHistoryPoint[]>;
@@ -86,12 +89,16 @@ interface SHMState {
     state0SliderPos: number; // 0 (State 0) to 100 (Current)
     cameraTarget: [number, number, number] | null;
 
-    // ---- IoT / ESP32 state (new) ----
-    iotData: IoTSensorData | null;
-    bridgeHealthState: BridgeHealthState;
-    wsConnectionState: WsConnectionState;
-    iotHistory: Record<IoTHistoryKey, IoTHistoryPoint[]>;
-    lastIoTTimestamp: number | null; // Browser Date.now() at last receipt
+    // ---- IoT / ESP32 state (new multi-node) ----
+    wsConnectionState: WsConnectionState;    // ---- IoT / ESP32 state (new multi-node) ----
+    iotNodes: IoTNodeMap;
+    iotHistoryByNode: Record<string, Record<IoTHistoryKey, IoTHistoryPoint[]>>;
+    nodeStatuses: Record<string, NodeConnectionState>;
+    selectedNodeId: string | null;
+
+    // ---- PINN State ----
+    pinnData: PinnUpdate | null;
+    selectedVirtualSensorId: string | null;
 
     // ---- Existing actions (unchanged) ----
     setActiveTab: (tab: TabType) => void;
@@ -107,10 +114,17 @@ interface SHMState {
     acknowledgeAnomaly: (anomalyId: string) => void;
     resetView: () => void;
 
-    // ---- IoT actions (new) ----
+    // ---- IoT actions (updated) ----
     processIoTMessage: (data: IoTSensorData) => void;
     setWsConnectionState: (state: WsConnectionState) => void;
-    setBridgeHealthState: (state: BridgeHealthState) => void;
+
+    // ---- IoT actions (new) ----
+    setSelectedNode: (nodeId: string | null) => void;
+    setNodeStatus: (nodeId: string, status: 'LIVE' | 'OFFLINE') => void;
+
+    // ---- PINN actions ----
+    setPinnData: (data: PinnUpdate | null) => void;
+    selectVirtualSensor: (id: string | null) => void;
 }
 
 export const useSHMStore = create<SHMState>((set, get) => ({
@@ -131,12 +145,16 @@ export const useSHMStore = create<SHMState>((set, get) => ({
     state0SliderPos: 100, // Default to Current State
     cameraTarget: [15, -2, 0], // Focused on Pier P3 initially
 
-    // ---- IoT state ----
-    iotData: null,
-    bridgeHealthState: 'OFFLINE',
+    // ---- IoT state (new) ----
     wsConnectionState: 'DISCONNECTED',
-    iotHistory: createEmptyHistory(),
-    lastIoTTimestamp: null,
+    iotNodes: {},
+    iotHistoryByNode: {},
+    nodeStatuses: {},
+    selectedNodeId: null,
+
+    // ---- PINN state ----
+    pinnData: null,
+    selectedVirtualSensorId: null,
 
     // ---- Existing actions ----
     setActiveTab: (tab) => set({ activeTab: tab }),
@@ -200,69 +218,89 @@ export const useSHMStore = create<SHMState>((set, get) => ({
 
     // ---- IoT actions ----
 
-    /**
-     * Process an incoming IoT message from ESP32 (via WebSocket or mock).
-     *
-     * Updates iotData, pushes to rolling history buffers, derives
-     * the bridge health state using explicit precedence:
-     *
-     *   1. validation.status != "OK" → SENSOR_ERROR
-     *   2. tinyml is null            → HEALTHY (inference pending)
-     *   3. tinyml.prediction         → DAMAGED or HEALTHY
-     *
-     * OFFLINE is set externally by the useBridgeData hook timeout.
-     */
     processIoTMessage: (data: IoTSensorData) => {
         const now = Date.now();
-        const history = { ...get().iotHistory };
+        const nodeId = data.node_id;
+        
+        if (!nodeId) return; // Ignore missing node_id
 
-        // Push accelerometer values to rolling buffers
-        history.mpu6500_x = pushToBuffer(history.mpu6500_x, data.sensors.mpu6500.x, now);
-        history.mpu6500_y = pushToBuffer(history.mpu6500_y, data.sensors.mpu6500.y, now);
-        history.mpu6500_z = pushToBuffer(history.mpu6500_z, data.sensors.mpu6500.z, now);
-        history.adxl345_x = pushToBuffer(history.adxl345_x, data.sensors.adxl345.x, now);
-        history.adxl345_y = pushToBuffer(history.adxl345_y, data.sensors.adxl345.y, now);
-        history.adxl345_z = pushToBuffer(history.adxl345_z, data.sensors.adxl345.z, now);
-        history.gy61_x = pushToBuffer(history.gy61_x, data.sensors.gy61.x, now);
-        history.gy61_y = pushToBuffer(history.gy61_y, data.sensors.gy61.y, now);
-        history.gy61_z = pushToBuffer(history.gy61_z, data.sensors.gy61.z, now);
-
-        // Push environment values
-        history.temperature = pushToBuffer(history.temperature, data.environment.temperature, now);
-        history.humidity = pushToBuffer(history.humidity, data.environment.humidity, now);
-
-        // Push strain (0 if null / pending integration)
-        history.strain = pushToBuffer(history.strain, data.strain.value ?? 0, now);
-
-        // Push damage probability (0 if TinyML not available)
-        history.damage_probability = pushToBuffer(
-            history.damage_probability,
-            data.tinyml?.damage_probability ?? 0,
-            now
-        );
-
-        // Derive health state (precedence: SENSOR_ERROR > DAMAGED > HEALTHY)
-        // OFFLINE is handled externally by useBridgeData timeout
+        const state = get();
+        
+        // Derive health state
         let healthState: BridgeHealthState;
         if (data.validation.status !== 'OK') {
             healthState = 'SENSOR_ERROR';
         } else if (data.tinyml === null) {
-            healthState = 'HEALTHY'; // Validation OK but inference pending
+            healthState = 'HEALTHY';
         } else if (data.tinyml.prediction === 'DAMAGED') {
             healthState = 'DAMAGED';
         } else {
             healthState = 'HEALTHY';
         }
 
+        // 1. Update Multi-Node State
+        const newNodes = { ...state.iotNodes, [nodeId]: data };
+        const newNodeStatuses = {
+            ...state.nodeStatuses,
+            [nodeId]: {
+                nodeId,
+                lastSeen: now,
+                status: 'LIVE' as const,
+                health: healthState
+            }
+        };
+
+        // Update history for this node specifically
+        const nodeHistory = state.iotHistoryByNode[nodeId] || createEmptyHistory();
+        const newHistory = { ...nodeHistory };
+        newHistory.mpu6500_x = pushToBuffer(newHistory.mpu6500_x, data.sensors.mpu6500.x, now);
+        newHistory.mpu6500_y = pushToBuffer(newHistory.mpu6500_y, data.sensors.mpu6500.y, now);
+        newHistory.mpu6500_z = pushToBuffer(newHistory.mpu6500_z, data.sensors.mpu6500.z, now);
+        newHistory.adxl345_x = pushToBuffer(newHistory.adxl345_x, data.sensors.adxl345.x, now);
+        newHistory.adxl345_y = pushToBuffer(newHistory.adxl345_y, data.sensors.adxl345.y, now);
+        newHistory.adxl345_z = pushToBuffer(newHistory.adxl345_z, data.sensors.adxl345.z, now);
+        newHistory.gy61_x = pushToBuffer(newHistory.gy61_x, data.sensors.gy61.x, now);
+        newHistory.gy61_y = pushToBuffer(newHistory.gy61_y, data.sensors.gy61.y, now);
+        newHistory.gy61_z = pushToBuffer(newHistory.gy61_z, data.sensors.gy61.z, now);
+        newHistory.temperature = pushToBuffer(newHistory.temperature, data.environment.temperature, now);
+        newHistory.humidity = pushToBuffer(newHistory.humidity, data.environment.humidity, now);
+        newHistory.strain = pushToBuffer(newHistory.strain, data.strain.value ?? 0, now);
+        newHistory.damage_probability = pushToBuffer(newHistory.damage_probability, data.tinyml?.damage_probability ?? 0, now);
+
+        const newHistoryByNode = { ...state.iotHistoryByNode, [nodeId]: newHistory };
+
+        // Select the first node if none is selected
+        const newSelectedNodeId = state.selectedNodeId === null ? nodeId : state.selectedNodeId;
+
         set({
-            iotData: data,
-            iotHistory: history,
-            lastIoTTimestamp: now,
-            bridgeHealthState: healthState,
+            // New multi-node updates
+            iotNodes: newNodes,
+            nodeStatuses: newNodeStatuses,
+            iotHistoryByNode: newHistoryByNode,
+            selectedNodeId: newSelectedNodeId,
         });
     },
 
     setWsConnectionState: (state) => set({ wsConnectionState: state }),
 
-    setBridgeHealthState: (state) => set({ bridgeHealthState: state }),
+    setSelectedNode: (nodeId) => set({ selectedNodeId: nodeId }),
+
+    setNodeStatus: (nodeId, status) => {
+        const currentStatus = get().nodeStatuses[nodeId];
+        if (currentStatus && currentStatus.status !== status) {
+            set((state) => ({
+                nodeStatuses: {
+                    ...state.nodeStatuses,
+                    [nodeId]: {
+                        ...currentStatus,
+                        status
+                    }
+                }
+            }));
+        }
+    },
+
+    // ---- PINN actions ----
+    setPinnData: (data) => set({ pinnData: data }),
+    selectVirtualSensor: (id) => set({ selectedVirtualSensorId: id }),
 }));
