@@ -37,9 +37,10 @@ export const BridgeModel: React.FC = () => {
     const state0Mode = useSHMStore((state) => state.state0Mode);
     const state0SliderPos = useSHMStore((state) => state.state0SliderPos);
 
-    // IoT data for vibration visualization
-    const iotData = useSHMStore((state) => state.iotData);
-    const bridgeHealthState = useSHMStore((state) => state.bridgeHealthState);
+    const selectedNodeId = useSHMStore((state) => state.selectedNodeId);
+    const iotData = useSHMStore((state) => selectedNodeId ? state.iotNodes[selectedNodeId] : null);
+    const nodeStatus = useSHMStore((state) => selectedNodeId ? state.nodeStatuses[selectedNodeId] : null);
+    const bridgeHealthState = nodeStatus?.health ?? 'OFFLINE';
 
     const pierP3Ref = useRef<THREE.Mesh>(null);
     const girderG2Ref = useRef<THREE.Mesh>(null);

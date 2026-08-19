@@ -5,20 +5,13 @@ import { useBridgeData } from './hooks/useBridgeData';
 
 import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
-import { ComponentDrawer } from './components/dashboard/ComponentDrawer';
 
 import { DashboardView } from './components/dashboard/DashboardView';
 import { DigitalTwinView } from './components/digital-twin/DigitalTwinView';
 import { SensorsView } from './components/sensors/SensorsView';
-import { SensorAnalytics } from './components/analytics/SensorAnalytics';
-import { AlertsCenter } from './components/alerts/AlertsCenter';
-import { State0Comparison } from './components/baseline/State0Comparison';
-import { DecisionSupportPanel } from './components/decision-support/DecisionSupportPanel';
-import { ReportGenerator } from './components/reports/ReportGenerator';
 
 export const App: React.FC = () => {
     const activeTab = useSHMStore((state) => state.activeTab);
-    const selectedComponentId = useSHMStore((state) => state.selectedComponentId);
 
     // Initialize IoT data pipeline (mock or real WebSocket)
     useBridgeData();
@@ -34,7 +27,7 @@ export const App: React.FC = () => {
 
 
     return (
-        <div className="flex flex-col h-screen w-screen bg-shm-bg text-slate-100 font-sans overflow-hidden select-none">
+        <div className="flex flex-col h-screen w-screen bg-[#f8f9fa] text-slate-800 font-sans overflow-hidden select-none">
             {/* Header Bar */}
             <Header />
 
@@ -44,19 +37,11 @@ export const App: React.FC = () => {
                 <Sidebar />
 
                 {/* Dynamic View Content Area */}
-                <main className="flex-1 overflow-hidden bg-[#090d16] relative">
+                <main className="flex-1 overflow-hidden relative bg-[#f8f9fa]">
                     {activeTab === 'dashboard' && <DashboardView />}
                     {activeTab === 'digital-twin' && <DigitalTwinView />}
                     {activeTab === 'sensors' && <SensorsView />}
-                    {activeTab === 'analytics' && <SensorAnalytics />}
-                    {activeTab === 'alerts' && <AlertsCenter />}
-                    {activeTab === 'baseline' && <State0Comparison />}
-                    {activeTab === 'decision-support' && <DecisionSupportPanel />}
-                    {activeTab === 'reports' && <ReportGenerator />}
                 </main>
-
-                {/* Right Contextual Component Drawer */}
-                {selectedComponentId && <ComponentDrawer />}
             </div>
         </div>
     );

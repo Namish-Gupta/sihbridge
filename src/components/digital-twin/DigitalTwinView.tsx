@@ -4,6 +4,7 @@ import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { BridgeModel } from './BridgeModel';
 import { SensorMarkers } from './SensorMarkers';
+import { VirtualSensorMarkers } from './VirtualSensorMarkers';
 import { useSHMStore } from '../../store/useSHMStore';
 import {
     RotateCcw,
@@ -177,6 +178,7 @@ export const DigitalTwinView: React.FC = () => {
 
                     <BridgeModel />
                     <SensorMarkers />
+                    <VirtualSensorMarkers />
                     <CameraController />
 
                     <OrbitControls

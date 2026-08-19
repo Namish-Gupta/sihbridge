@@ -235,3 +235,76 @@ export interface IoTHistoryPoint {
     receivedAt: number;
     value: number;
 }
+
+export type IoTNodeMap = Record<string, IoTSensorData>;
+
+export type NodeConnectionState = {
+    nodeId: string;
+    lastSeen: number;
+    status: 'LIVE' | 'OFFLINE';
+    health: BridgeHealthState;
+};
+
+// ============================================================
+// PINN Virtual Sensor Types
+// ============================================================
+
+export interface PinnVirtualSensor {
+    sensor_id: string; // e.g. "VS_00" -> backend sends sensor_id, wait, backend log says "sensor_id": "VS_00", "x_normalized": 0.0
+    x_normalized: number;
+    pinn_displacement: number;
+
+    // MPU6500 Features
+    mpu_x_mean: number;
+    mpu_x_std: number;
+    mpu_x_rms: number;
+    mpu_x_ptp: number;
+    mpu_y_mean: number;
+    mpu_y_std: number;
+    mpu_y_rms: number;
+    mpu_y_ptp: number;
+    mpu_z_mean: number;
+    mpu_z_std: number;
+    mpu_z_rms: number;
+    mpu_z_ptp: number;
+
+    // ADXL345 Features
+    adxl_x_mean: number;
+    adxl_x_std: number;
+    adxl_x_rms: number;
+    adxl_x_ptp: number;
+    adxl_y_mean: number;
+    adxl_y_std: number;
+    adxl_y_rms: number;
+    adxl_y_ptp: number;
+    adxl_z_mean: number;
+    adxl_z_std: number;
+    adxl_z_rms: number;
+    adxl_z_ptp: number;
+
+    // Strain Features
+    strain_mean: number;
+    strain_std: number;
+    strain_ptp: number;
+
+    // Environment Features
+    temperature_mean: number;
+    humidity_mean: number;
+
+    // ML Predictions
+    damage_probability: number;
+    damage_probability_pct: number;
+    healthy_probability: number;
+    healthy_probability_pct: number;
+    predicted_state: 'HEALTHY' | 'DAMAGED';
+}
+
+export interface PinnUpdate {
+    type: 'pinn_update';
+    source_nodes: string[];
+    timestamp_ms: number;
+    status: 'success' | 'ERROR';
+    message?: string;
+    num_virtual_sensors: number;
+    virtual_sensors: PinnVirtualSensor[];
+}
